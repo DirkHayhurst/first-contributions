@@ -169,7 +169,7 @@ ALL_SECTIONS = [
     {"heading": "Part B — Three-Digit Addition &amp; Subtraction",
      "style": "stacked", "count": 12, "cols": 4, "balanced": True},
     {"heading": "Part C — Multiplication (2–5 digits × 1–2 digits)",
-     "style": "multiplication", "count": 4, "cols": 4,
+     "style": "multiplication", "count": 8, "cols": 4,
      "overrides": {"mult_top_min": 10, "mult_top_max": 99999,
                    "mult_bot_min": 2, "mult_bot_max": 99}},
     {"heading": "Part D — Fractions &amp; Mixed Numbers (same denominator)",
