@@ -17,6 +17,7 @@ Pick a style with `--style`:
 | `stacked` | 3-digit addition & subtraction in vertical column form |
 | `multiplication` | multi-step stacked multiplication (multi-digit × multi-digit) |
 | `fractions` | add & subtract fractions that share the same denominator |
+| `all` | one combined "combo platter" sheet with a labeled section of every type |
 
 Every style lays out on a uniform fixed-cell grid, so stacking problems never
 throws the rest of the page out of alignment. Stacked numbers are drawn in a
@@ -29,7 +30,9 @@ python3 generate.py                          # classic 100-problem mixed sheet
 python3 generate.py --style stacked          # 3-digit stacked add/subtract
 python3 generate.py --style multiplication   # multi-step stacked ×
 python3 generate.py --style fractions        # same-denominator fraction +/-
+python3 generate.py --style all              # combo sheet: a section of each type
 python3 generate.py --sets 5                 # five different sheets at once
+python3 generate.py --no-key                 # worksheet only, no answer key
 python3 generate.py --help                   # all options
 ```
 

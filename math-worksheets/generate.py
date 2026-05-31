@@ -28,6 +28,7 @@ Examples
 """
 
 import argparse
+import copy
 import random
 import os
 from datetime import date
@@ -128,7 +129,19 @@ DEFAULTS = {
                        "Multiply. Show your partial products and add them up."),
     "fractions": (20, 4, "Fractions: Add & Subtract",
                   "Add or subtract. Keep the same denominator."),
+    # the "combo platter": one sheet with a labeled section of every type
+    "all": (None, None, "Mixed Math Practice",
+            "Solve each problem. Show your work where you need to."),
 }
+ALLOWED_OPS["all"] = ["+", "-", "x", "/"]
+
+# sections for the "all" style: (heading, style, problem count, grid columns)
+ALL_SECTIONS = [
+    ("Part A — Add, Subtract, Multiply &amp; Divide", "horizontal", 16, 4),
+    ("Part B — Three-Digit Addition &amp; Subtraction", "stacked", 8, 4),
+    ("Part C — Multiplication", "multiplication", 4, 4),
+    ("Part D — Fractions (same denominator)", "fractions", 8, 4),
+]
 
 
 def build_problems(rng, args):
@@ -202,6 +215,12 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 }
 .ans-frac .fr { color: #c0392b; }
 .ans-frac .fr .top { border-color: #c0392b; }
+
+/* section headings on the combined "all" sheet */
+.section-title {
+    font-size: 15px; font-weight: bold; margin: 14px 0 6px;
+    border-bottom: 1px solid #999; padding-bottom: 3px;
+}
 
 .key-tag { color: #c0392b; }
 @media print { .no-print { display: none; } body { margin: 0; } }
@@ -278,11 +297,7 @@ def render_page(problems, args, label, show):
     """
 
 
-def render_document(problems, args):
-    pages = [render_page(problems, args, "", False)]
-    if not args.no_key:
-        pages.append(render_page(
-            problems, args, ' <span class="key-tag">(KEY)</span>', True))
+def wrap_html(title, pages):
     banner = (
         '<div class="no-print"><b>To print:</b> Press Ctrl/Cmd+P, set margins '
         'to "Default" or "None", then print or "Save as PDF". This banner will '
@@ -291,9 +306,66 @@ def render_document(problems, args):
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{args.title}</title><style>{PAGE_CSS}</style></head>
+<title>{title}</title><style>{PAGE_CSS}</style></head>
 <body>{banner}{''.join(pages)}</body></html>
 """
+
+
+def render_document(problems, args):
+    pages = [render_page(problems, args, "", False)]
+    if not args.no_key:
+        pages.append(render_page(
+            problems, args, ' <span class="key-tag">(KEY)</span>', True))
+    return wrap_html(args.title, pages)
+
+
+# --- combined "all" sheet: a labeled section of every problem type ----------
+
+def build_all_sections(rng, args):
+    """Return [(heading, [problems], columns), ...] for the combo sheet."""
+    sections = []
+    for heading, style, count, cols in ALL_SECTIONS:
+        sec = copy.copy(args)
+        sec.style = style
+        sec.ops = ALLOWED_OPS[style]
+        gen = STYLES[style]
+        sections.append((heading, [gen(rng, sec) for _ in range(count)], cols))
+    return sections
+
+
+def render_section(heading, problems, columns, show):
+    rows = -(-len(problems) // columns)
+    cells = "".join(render_cell(p, i, show) for i, p in enumerate(problems, 1))
+    grid_style = (f"grid-template-columns: repeat({columns}, 1fr);"
+                  f"grid-template-rows: repeat({rows}, auto);")
+    return (f'<div class="section-title">{heading}</div>'
+            f'<div class="grid" style="{grid_style}">{cells}</div>')
+
+
+def render_all_page(sections, args, label, show):
+    total = sum(len(p) for _, p, _ in sections)
+    body = "".join(render_section(h, p, c, show) for h, p, c in sections)
+    subtitle = "Answer Key" if show else args.subtitle
+    return f"""
+    <div class="page">
+        <div class="title-box">{args.title}{label}</div>
+        <div class="subtitle">{subtitle}</div>
+        <div class="meta">
+            <span>Name: ______________________</span>
+            <span>Date: ______________</span>
+            <span>Score: _____ / {total}</span>
+        </div>
+        {body}
+    </div>
+    """
+
+
+def render_all_document(sections, args):
+    pages = [render_all_page(sections, args, "", False)]
+    if not args.no_key:
+        pages.append(render_all_page(
+            sections, args, ' <span class="key-tag">(KEY)</span>', True))
+    return wrap_html(args.title, pages)
 
 
 # ----------------------------------------------------------------------
@@ -304,8 +376,10 @@ def parse_args():
     p = argparse.ArgumentParser(
         description="Generate printable math worksheets in several styles.",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("--style", choices=list(STYLES), default="horizontal",
-                   help="worksheet style (default: horizontal)")
+    p.add_argument("--style", choices=list(STYLES) + ["all"],
+                   default="horizontal",
+                   help="worksheet style, or 'all' for a combined sheet with a "
+                        "section of every type (default: horizontal)")
     p.add_argument("--count", type=int, default=None,
                    help="problems per worksheet (default depends on style)")
     p.add_argument("--columns", type=int, default=None,
@@ -379,7 +453,10 @@ def main():
     written = []
     for n in range(1, args.sets + 1):
         rng = random.Random(base_seed + n)
-        html = render_document(build_problems(rng, args), args)
+        if args.style == "all":
+            html = render_all_document(build_all_sections(rng, args), args)
+        else:
+            html = render_document(build_problems(rng, args), args)
         suffix = f"-{n}" if args.sets > 1 else ""
         path = os.path.join(args.outdir,
                             f"worksheet-{args.style}-{stamp}{suffix}.html")
