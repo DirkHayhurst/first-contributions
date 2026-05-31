@@ -43,10 +43,13 @@ DIV = "÷"    # ÷
 # Every problem is a dict with a "kind" the renderer knows how to draw:
 #   {"kind": "h",     "text": "15 - 8 =", "answer": 7}
 #   {"kind": "stack", "a": 472, "b": 135, "op": "+", "answer": 607, "work": False}
-#   {"kind": "frac",  "n1": 3, "n2": 2, "d": 8, "op": "+", "ans_num": 5}
+#   {"kind": "frac",  "w1":0,"w2":0,"n1":3,"n2":2,"d":8,"op":"+",
+#                      "ans_whole":0,"ans_num":5}
+# Generators take an optional forced `op`; when None they pick one at random
+# from args.ops. The forced op lets the combo sheet balance + and - evenly.
 
-def gen_horizontal(rng, args):
-    op = rng.choice(args.ops)
+def gen_horizontal(rng, args, op=None):
+    op = op or rng.choice(args.ops)
     if op == "+":
         a, b = rng.randint(0, args.max_add), rng.randint(0, args.max_add)
         return {"kind": "h", "text": f"{a} + {b} =", "answer": a + b}
@@ -64,9 +67,9 @@ def gen_horizontal(rng, args):
             "answer": quotient}
 
 
-def gen_stacked(rng, args):
+def gen_stacked(rng, args, op=None):
     """3-digit (configurable) addition / subtraction, vertical form."""
-    op = rng.choice(args.ops)
+    op = op or rng.choice(args.ops)
     if op == "+":
         a = rng.randint(args.stack_min, args.stack_max)
         b = rng.randint(args.stack_min, args.stack_max)
@@ -79,29 +82,51 @@ def gen_stacked(rng, args):
             "answer": a - b, "work": False}
 
 
-def gen_multiplication(rng, args):
+def _rand_by_digits(rng, lo, hi):
+    """Pick a number in [lo, hi], choosing the digit count uniformly first so a
+    wide range (e.g. 10..99999) gives an even spread of 2-, 3-, 4-, 5-digit
+    numbers instead of mostly the largest size."""
+    d = rng.randint(len(str(lo)), len(str(hi)))
+    lo_d = max(lo, 10 ** (d - 1)) if d > 1 else lo
+    hi_d = min(hi, 10 ** d - 1)
+    if lo_d > hi_d:                      # range doesn't actually cover d digits
+        lo_d, hi_d = lo, hi
+    return rng.randint(lo_d, hi_d)
+
+
+def gen_multiplication(rng, args, op=None):
     """Multi-step stacked multiplication (multi-digit x multi-digit)."""
-    a = rng.randint(args.mult_top_min, args.mult_top_max)
-    b = rng.randint(args.mult_bot_min, args.mult_bot_max)
+    a = _rand_by_digits(rng, args.mult_top_min, args.mult_top_max)
+    b = _rand_by_digits(rng, args.mult_bot_min, args.mult_bot_max)
     return {"kind": "stack", "a": a, "b": b, "op": MULT,
             "answer": a * b, "work": True}
 
 
-def gen_fraction(rng, args):
-    """Add/subtract two fractions with the same denominator. Proper results."""
-    op = rng.choice(args.ops)
-    d = rng.randint(2, args.max_denom)
+def gen_fraction(rng, args, op=None):
+    """Add/subtract fractions with a common denominator. Results stay proper
+    (no carrying/borrowing). May include whole-number parts (mixed numbers)
+    with probability args.frac_mixed_prob, e.g. 2 1/5 + 4 2/5 = 6 3/5."""
+    op = op or rng.choice(args.ops)
+    d = rng.randint(3, max(3, args.max_denom))
+    use_whole = rng.random() < getattr(args, "frac_mixed_prob", 0.0)
     if op == "+":
-        # keep the sum proper: n1 + n2 <= d
-        n1 = rng.randint(1, d - 1)
-        n2 = rng.randint(1, d - n1)
-        return {"kind": "frac", "n1": n1, "n2": n2, "d": d, "op": "+",
-                "ans_num": n1 + n2}
-    # subtraction -- keep result >= 0
-    n1 = rng.randint(1, d - 1)
-    n2 = rng.randint(1, n1)
-    return {"kind": "frac", "n1": n1, "n2": n2, "d": d, "op": "-",
-            "ans_num": n1 - n2}
+        # keep the fraction sum a strictly proper fraction: 2 <= n1+n2 <= d-1
+        n1 = rng.randint(1, d - 2)
+        n2 = rng.randint(1, d - 1 - n1)
+        ans_num = n1 + n2
+        w1 = rng.randint(1, args.max_whole) if use_whole else 0
+        w2 = rng.randint(1, args.max_whole) if use_whole else 0
+        ans_whole = w1 + w2
+    else:
+        # keep the fraction difference positive: n1 > n2
+        n1 = rng.randint(2, d - 1)
+        n2 = rng.randint(1, n1 - 1)
+        ans_num = n1 - n2
+        w2 = rng.randint(1, args.max_whole) if use_whole else 0
+        w1 = rng.randint(w2, args.max_whole) if use_whole else 0
+        ans_whole = w1 - w2
+    return {"kind": "frac", "w1": w1, "w2": w2, "n1": n1, "n2": n2, "d": d,
+            "op": op, "ans_whole": ans_whole, "ans_num": ans_num}
 
 
 STYLES = {
@@ -127,7 +152,7 @@ DEFAULTS = {
                 "Add or subtract. Line up the digits and regroup as needed."),
     "multiplication": (15, 5, "Stacked Multiplication",
                        "Multiply. Show your partial products and add them up."),
-    "fractions": (20, 4, "Fractions: Add & Subtract",
+    "fractions": (18, 3, "Fractions: Add & Subtract",
                   "Add or subtract. Keep the same denominator."),
     # the "combo platter": one sheet with a labeled section of every type
     "all": (None, None, "Mixed Math Practice",
@@ -135,12 +160,21 @@ DEFAULTS = {
 }
 ALLOWED_OPS["all"] = ["+", "-", "x", "/"]
 
-# sections for the "all" style: (heading, style, problem count, grid columns)
+# sections for the "all" style. Each section gets its own uniform grid.
+#   balanced=True  -> split the count evenly across the style's operations
+#   overrides      -> per-section argument overrides (number ranges, etc.)
 ALL_SECTIONS = [
-    ("Part A — Add, Subtract, Multiply &amp; Divide", "horizontal", 16, 4),
-    ("Part B — Three-Digit Addition &amp; Subtraction", "stacked", 8, 4),
-    ("Part C — Multiplication", "multiplication", 4, 4),
-    ("Part D — Fractions (same denominator)", "fractions", 8, 4),
+    {"heading": "Part A — Add, Subtract, Multiply &amp; Divide",
+     "style": "horizontal", "count": 28, "cols": 4},
+    {"heading": "Part B — Three-Digit Addition &amp; Subtraction",
+     "style": "stacked", "count": 12, "cols": 4, "balanced": True},
+    {"heading": "Part C — Multiplication (2–5 digits × 1–2 digits)",
+     "style": "multiplication", "count": 4, "cols": 4,
+     "overrides": {"mult_top_min": 10, "mult_top_max": 99999,
+                   "mult_bot_min": 2, "mult_bot_max": 99}},
+    {"heading": "Part D — Fractions &amp; Mixed Numbers (same denominator)",
+     "style": "fractions", "count": 9, "cols": 3,
+     "overrides": {"frac_mixed_prob": 0.6}},
 ]
 
 
@@ -203,12 +237,13 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 }
 
 /* fractions */
-.cell.frac { align-items: center; min-height: 70px; }
+.cell.frac { align-items: center; min-height: 70px; white-space: nowrap; }
 .fr { display: inline-flex; flex-direction: column; align-items: center;
-      margin: 0 4px; line-height: 1.05; }
+      margin: 0 3px; line-height: 1.05; vertical-align: middle; }
 .fr .top { border-bottom: 2px solid #111; padding: 0 6px; }
 .fr .bot { padding: 0 6px; }
-.op, .eq { margin: 0 5px; }
+.whole { font-size: 18px; vertical-align: middle; margin-right: 2px; }
+.op, .eq { margin: 0 5px; vertical-align: middle; }
 .ans-frac.blank {
     display: inline-block; width: 34px; border-bottom: 1px solid #888;
     margin-left: 6px;
@@ -255,12 +290,27 @@ def _fr(num, den):
     return f'<span class="fr"><span class="top">{num}</span><span class="bot">{den}</span></span>'
 
 
+def _mixed(whole, num, den):
+    """Render a (possibly) mixed number: a whole part, a fraction, or both."""
+    w = f'<span class="whole">{whole}</span>' if whole else ""
+    return f'{w}{_fr(num, den)}'
+
+
+def _mixed_answer(whole, num, den):
+    """Like _mixed, but drop a zero fraction so the answer reads cleanly
+    (e.g. "5" instead of "5 0/8")."""
+    if whole and not num:
+        return f'<span class="whole">{whole}</span>'
+    return _mixed(whole, num, den)
+
+
 def render_frac(p, show):
     op_sym = "+" if p["op"] == "+" else "−"  # − minus sign
-    left = _fr(p["n1"], p["d"])
-    right = _fr(p["n2"], p["d"])
+    left = _mixed(p["w1"], p["n1"], p["d"])
+    right = _mixed(p["w2"], p["n2"], p["d"])
     if show:
-        answer = f'<span class="ans-frac">{_fr(p["ans_num"], p["d"])}</span>'
+        ans = _mixed_answer(p["ans_whole"], p["ans_num"], p["d"])
+        answer = f'<span class="ans-frac">{ans}</span>'
     else:
         answer = '<span class="ans-frac blank"></span>'
     return (f'{left}<span class="op">{op_sym}</span>{right}'
@@ -321,15 +371,30 @@ def render_document(problems, args):
 
 # --- combined "all" sheet: a labeled section of every problem type ----------
 
+def _balanced_ops(rng, ops, count):
+    """A length-`count` list of ops, split as evenly as possible, shuffled."""
+    seq = [ops[i % len(ops)] for i in range(count)]
+    rng.shuffle(seq)
+    return seq
+
+
 def build_all_sections(rng, args):
     """Return [(heading, [problems], columns), ...] for the combo sheet."""
     sections = []
-    for heading, style, count, cols in ALL_SECTIONS:
+    for spec in ALL_SECTIONS:
         sec = copy.copy(args)
-        sec.style = style
-        sec.ops = ALLOWED_OPS[style]
-        gen = STYLES[style]
-        sections.append((heading, [gen(rng, sec) for _ in range(count)], cols))
+        sec.style = spec["style"]
+        sec.ops = ALLOWED_OPS[spec["style"]]
+        for key, val in spec.get("overrides", {}).items():
+            setattr(sec, key, val)
+        gen = STYLES[spec["style"]]
+        count = spec["count"]
+        if spec.get("balanced"):
+            problems = [gen(rng, sec, op)
+                        for op in _balanced_ops(rng, sec.ops, count)]
+        else:
+            problems = [gen(rng, sec) for _ in range(count)]
+        sections.append((spec["heading"], problems, spec["cols"]))
     return sections
 
 
@@ -421,6 +486,10 @@ def parse_args():
     # fractions
     p.add_argument("--max-denom", type=int, default=12,
                    help="largest denominator for fraction problems (12)")
+    p.add_argument("--mixed-numbers", action="store_true",
+                   help="mix in mixed numbers (whole + fraction), e.g. 2 1/5")
+    p.add_argument("--max-whole", type=int, default=5,
+                   help="largest whole-number part for mixed numbers (5)")
     p.add_argument("--outdir", default=os.path.join(
                    os.path.dirname(os.path.abspath(__file__)), "output"),
                    help="where to write the .html files")
@@ -441,6 +510,8 @@ def finalize_args(args):
     allowed = ALLOWED_OPS[args.style]
     chosen = args.ops if args.ops else allowed
     args.ops = [o for o in chosen if o in allowed] or allowed
+    # probability a fraction problem is a mixed number (combo overrides this)
+    args.frac_mixed_prob = 0.6 if args.mixed_numbers else 0.0
     return args
 
 
