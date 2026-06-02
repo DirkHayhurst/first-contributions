@@ -129,11 +129,24 @@ def gen_fraction(rng, args, op=None):
             "op": op, "ans_whole": ans_whole, "ans_num": ans_num}
 
 
+def gen_longdiv(rng, args, op=None):
+    """Long division, drawn in the bracket form. Builds the dividend from a
+    known quotient so it divides evenly (no remainder, no decimals)."""
+    divisor = rng.randint(args.ld_divisor_min, args.ld_divisor_max)
+    # pick a quotient that keeps the dividend within the wanted digit range
+    q_lo = -(-args.ld_dividend_min // divisor)        # ceil(min / divisor)
+    q_hi = args.ld_dividend_max // divisor            # floor(max / divisor)
+    quotient = rng.randint(q_lo, q_hi)
+    return {"kind": "longdiv", "divisor": divisor,
+            "dividend": divisor * quotient, "answer": quotient}
+
+
 STYLES = {
     "horizontal":     gen_horizontal,
     "stacked":        gen_stacked,
     "multiplication": gen_multiplication,
     "fractions":      gen_fraction,
+    "longdivision":   gen_longdiv,
 }
 
 # operations each style is allowed to use (multiplication is fixed to x)
@@ -142,6 +155,7 @@ ALLOWED_OPS = {
     "stacked":        ["+", "-"],
     "multiplication": ["x"],
     "fractions":      ["+", "-"],
+    "longdivision":   ["/"],
 }
 
 # per-style defaults: (problem count, grid columns, title, subtitle)
@@ -154,6 +168,8 @@ DEFAULTS = {
                        "Multiply. Show your partial products and add them up."),
     "fractions": (18, 3, "Fractions: Add & Subtract",
                   "Add or subtract. Keep the same denominator."),
+    "longdivision": (12, 4, "Long Division",
+                     "Divide. These all come out even -- no remainders."),
     # the "combo platter": one sheet with a labeled section of every type
     "all": (None, None, "Mixed Math Practice",
             "Solve each problem. Show your work where you need to."),
@@ -165,16 +181,18 @@ ALLOWED_OPS["all"] = ["+", "-", "x", "/"]
 #   overrides      -> per-section argument overrides (number ranges, etc.)
 ALL_SECTIONS = [
     {"heading": "Part A — Add, Subtract, Multiply &amp; Divide",
-     "style": "horizontal", "count": 28, "cols": 4},
+     "style": "horizontal", "count": 20, "cols": 4},
     {"heading": "Part B — Three-Digit Addition &amp; Subtraction",
-     "style": "stacked", "count": 12, "cols": 4, "balanced": True},
+     "style": "stacked", "count": 8, "cols": 4, "balanced": True},
     {"heading": "Part C — Multiplication (2–5 digits × 1–2 digits)",
      "style": "multiplication", "count": 8, "cols": 4,
      "overrides": {"mult_top_min": 10, "mult_top_max": 99999,
                    "mult_bot_min": 2, "mult_bot_max": 99}},
     {"heading": "Part D — Fractions &amp; Mixed Numbers (same denominator)",
-     "style": "fractions", "count": 9, "cols": 3,
+     "style": "fractions", "count": 8, "cols": 3,
      "overrides": {"frac_mixed_prob": 0.6}},
+    {"heading": "Part E — Long Division (3-digit ÷ 1-digit, no remainders)",
+     "style": "longdivision", "count": 8, "cols": 4},
 ]
 
 
@@ -251,6 +269,22 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .ans-frac .fr { color: #c0392b; }
 .ans-frac .fr .top { border-color: #c0392b; }
 
+/* long division -- divisor ) dividend with the quotient above the bar */
+.cell.longdiv { min-height: 96px; }
+.ld { display: inline-flex; align-items: flex-end;
+      font-family: 'Courier New', Courier, monospace; font-size: 20px; }
+.ld-divisor { padding: 0 4px 2px 0; }
+.ld-box { display: inline-flex; flex-direction: column; }
+.ld-quotient {
+    min-height: 1.3em; padding: 0 8px 1px 10px; color: #c0392b;
+    font-weight: bold; text-align: left;
+}
+.ld-dividend {
+    border-top: 2px solid #111; border-left: 2px solid #111;
+    border-top-left-radius: 10px 14px; padding: 2px 8px 0 10px;
+    letter-spacing: 2px;
+}
+
 /* section headings on the combined "all" sheet */
 .section-title {
     font-size: 15px; font-weight: bold; margin: 14px 0 6px;
@@ -317,7 +351,22 @@ def render_frac(p, show):
             f'<span class="eq">=</span>{answer}')
 
 
-RENDERERS = {"h": render_horizontal, "stack": render_stack, "frac": render_frac}
+def render_longdiv(p, show):
+    """Long division in bracket form: divisor ) dividend, with the quotient
+    sitting above the bar (shown only on the answer key)."""
+    quotient = str(p["answer"]) if show else "&nbsp;"
+    return (
+        '<span class="ld">'
+        f'<span class="ld-divisor">{p["divisor"]}</span>'
+        '<span class="ld-box">'
+        f'<span class="ld-quotient">{quotient}</span>'
+        f'<span class="ld-dividend">{p["dividend"]}</span>'
+        '</span></span>'
+    )
+
+
+RENDERERS = {"h": render_horizontal, "stack": render_stack,
+             "frac": render_frac, "longdiv": render_longdiv}
 
 
 def render_cell(p, index, show):
@@ -490,6 +539,15 @@ def parse_args():
                    help="mix in mixed numbers (whole + fraction), e.g. 2 1/5")
     p.add_argument("--max-whole", type=int, default=5,
                    help="largest whole-number part for mixed numbers (5)")
+    # long division ranges (results always divide evenly, no remainders)
+    p.add_argument("--ld-divisor-min", type=int, default=2,
+                   help="smallest divisor for long division (2)")
+    p.add_argument("--ld-divisor-max", type=int, default=9,
+                   help="largest divisor for long division (9)")
+    p.add_argument("--ld-dividend-min", type=int, default=100,
+                   help="smallest dividend for long division (100)")
+    p.add_argument("--ld-dividend-max", type=int, default=999,
+                   help="largest dividend for long division (999)")
     p.add_argument("--outdir", default=os.path.join(
                    os.path.dirname(os.path.abspath(__file__)), "output"),
                    help="where to write the .html files")
