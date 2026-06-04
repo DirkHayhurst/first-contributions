@@ -241,7 +241,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 
 /* stacked add/sub & multiplication share the monospace box */
 .cell.stack { min-height: 78px; }
-.cell.stack.work { min-height: 120px; }   /* extra room for partial products */
+.cell.stack.work { min-height: 160px; }   /* lots of room to work partial products */
 .stack-wrap { display: inline-block; }
 .stack-nums {
     margin: 0; font-family: 'Courier New', Courier, monospace;
@@ -285,10 +285,10 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
     letter-spacing: 2px;
 }
 
-/* section headings on the combined "all" sheet */
+/* section headings on the combined "all" sheet -- kept small and unobtrusive */
 .section-title {
-    font-size: 15px; font-weight: bold; margin: 14px 0 6px;
-    border-bottom: 1px solid #999; padding-bottom: 3px;
+    font-size: 11px; font-weight: bold; margin: 6px 0 2px;
+    color: #444; text-transform: uppercase; letter-spacing: 0.3px;
 }
 
 .key-tag { color: #c0392b; }
@@ -309,12 +309,12 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .page { padding: 0.3in 0.45in; min-height: 0; }
 .compact .grid { gap: 3px 12px; }
 .compact .cell { font-size: 15px; padding: 1px; }
-.compact .section-title { font-size: 12.5px; margin: 4px 0 3px; padding-bottom: 2px; }
+.compact .section-title { font-size: 9.5px; margin: 3px 0 1px; }
 .compact .cell.stack { min-height: 58px; }
-.compact .cell.stack.work { min-height: 80px; }
+.compact .cell.stack.work { min-height: 130px; }   /* freehand working space */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
-.compact .cell.frac { min-height: 46px; }
-.compact .cell.longdiv { min-height: 68px; }
+.compact .cell.frac { min-height: 44px; }
+.compact .cell.longdiv { min-height: 64px; }
 .compact .ld { font-size: 17px; }
 """
 
@@ -431,17 +431,12 @@ def render_page(problems, args, label, show):
 
 
 def wrap_html(title, pages, compact=False):
-    banner = (
-        '<div class="no-print"><b>To print:</b> Press Ctrl/Cmd+P, set margins '
-        'to "Default" or "None", then print or "Save as PDF". This banner will '
-        'not appear on the printout.</div>'
-    )
     body_class = "compact" if compact else ""
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title><style>{PAGE_CSS}</style></head>
-<body class="{body_class}">{banner}{''.join(pages)}</body></html>
+<body class="{body_class}">{''.join(pages)}</body></html>
 """
 
 
