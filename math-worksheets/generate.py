@@ -298,6 +298,24 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
     font-family: -apple-system, system-ui, sans-serif; font-size: 13px;
     max-width: 8.5in; margin: 12px auto;
 }
+
+/* ---- compact mode: trim everything to fit one page ---- */
+.compact .compact-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid #111; padding-bottom: 3px; margin-bottom: 4px;
+}
+.compact .ch-title { font-size: 16px; font-weight: bold; }
+.compact .ch-fields { font-size: 12px; color: #333; }
+.compact .page { padding: 0.3in 0.45in; min-height: 0; }
+.compact .grid { gap: 3px 12px; }
+.compact .cell { font-size: 15px; padding: 1px; }
+.compact .section-title { font-size: 12.5px; margin: 4px 0 3px; padding-bottom: 2px; }
+.compact .cell.stack { min-height: 58px; }
+.compact .cell.stack.work { min-height: 80px; }
+.compact .stack-nums, .compact .ans-slot { font-size: 16px; }
+.compact .cell.frac { min-height: 46px; }
+.compact .cell.longdiv { min-height: 68px; }
+.compact .ld { font-size: 17px; }
 """
 
 
@@ -377,36 +395,53 @@ def render_cell(p, index, show):
     return f'<div class="cell {cls}"><span class="qnum">{index}.</span>{body}</div>'
 
 
+def render_header(args, label, subtitle):
+    """The block above the problems. Compact mode collapses the bordered title,
+    subtitle and name/date row into a single slim strip to save vertical space."""
+    if getattr(args, "compact", False):
+        return (
+            '<div class="compact-head">'
+            f'<span class="ch-title">{args.title}{label}</span>'
+            '<span class="ch-fields">Name: _______________&nbsp;&nbsp;'
+            'Date: __________</span>'
+            '</div>'
+        )
+    return (
+        f'<div class="title-box">{args.title}{label}</div>'
+        f'<div class="subtitle">{subtitle}</div>'
+        '<div class="meta">'
+        '<span>Name: ______________________</span>'
+        '<span>Date: ______________</span>'
+        '</div>'
+    )
+
+
 def render_page(problems, args, label, show):
     rows = -(-args.count // args.columns)  # ceil -> rows per column
     cells = "".join(render_cell(p, i, show) for i, p in enumerate(problems, 1))
     grid_style = (f"grid-template-columns: repeat({args.columns}, 1fr);"
                   f"grid-template-rows: repeat({rows}, auto);")
+    header = render_header(args, label, args.subtitle if not show else "Answer Key")
     return f"""
     <div class="page">
-        <div class="title-box">{args.title}{label}</div>
-        <div class="subtitle">{args.subtitle if not show else 'Answer Key'}</div>
-        <div class="meta">
-            <span>Name: ______________________</span>
-            <span>Date: ______________</span>
-            <span>Score: _____ / {len(problems)}</span>
-        </div>
+        {header}
         <div class="grid" style="{grid_style}">{cells}</div>
     </div>
     """
 
 
-def wrap_html(title, pages):
+def wrap_html(title, pages, compact=False):
     banner = (
         '<div class="no-print"><b>To print:</b> Press Ctrl/Cmd+P, set margins '
         'to "Default" or "None", then print or "Save as PDF". This banner will '
         'not appear on the printout.</div>'
     )
+    body_class = "compact" if compact else ""
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title><style>{PAGE_CSS}</style></head>
-<body>{banner}{''.join(pages)}</body></html>
+<body class="{body_class}">{banner}{''.join(pages)}</body></html>
 """
 
 
@@ -415,7 +450,7 @@ def render_document(problems, args):
     if not args.no_key:
         pages.append(render_page(
             problems, args, ' <span class="key-tag">(KEY)</span>', True))
-    return wrap_html(args.title, pages)
+    return wrap_html(args.title, pages, getattr(args, "compact", False))
 
 
 # --- combined "all" sheet: a labeled section of every problem type ----------
@@ -457,18 +492,11 @@ def render_section(heading, problems, columns, show):
 
 
 def render_all_page(sections, args, label, show):
-    total = sum(len(p) for _, p, _ in sections)
     body = "".join(render_section(h, p, c, show) for h, p, c in sections)
-    subtitle = "Answer Key" if show else args.subtitle
+    header = render_header(args, label, args.subtitle if not show else "Answer Key")
     return f"""
     <div class="page">
-        <div class="title-box">{args.title}{label}</div>
-        <div class="subtitle">{subtitle}</div>
-        <div class="meta">
-            <span>Name: ______________________</span>
-            <span>Date: ______________</span>
-            <span>Score: _____ / {total}</span>
-        </div>
+        {header}
         {body}
     </div>
     """
@@ -479,7 +507,7 @@ def render_all_document(sections, args):
     if not args.no_key:
         pages.append(render_all_page(
             sections, args, ' <span class="key-tag">(KEY)</span>', True))
-    return wrap_html(args.title, pages)
+    return wrap_html(args.title, pages, getattr(args, "compact", False))
 
 
 # ----------------------------------------------------------------------
@@ -508,6 +536,8 @@ def parse_args():
                    help="random seed for reproducible worksheets")
     p.add_argument("--no-key", action="store_true",
                    help="do not include the answer-key page")
+    p.add_argument("--compact", action="store_true",
+                   help="slim header and tighter spacing to fit more on one page")
     p.add_argument("--title", default=None, help="override the worksheet title")
     p.add_argument("--subtitle", default=None,
                    help="override the instruction line")
