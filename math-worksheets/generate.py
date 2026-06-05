@@ -141,6 +141,75 @@ def gen_longdiv(rng, args, op=None):
             "dividend": divisor * quotient, "answer": quotient}
 
 
+# --- place value -----------------------------------------------------------
+# each tuple: (value, singular name, plural name, chart label)
+PLACES = [
+    (1,           "one",              "ones",              "Ones"),
+    (10,          "ten",              "tens",              "Tens"),
+    (100,         "hundred",          "hundreds",          "Hundreds"),
+    (1_000,       "thousand",         "thousands",         "Thousands"),
+    (10_000,      "ten-thousand",     "ten-thousands",     "Ten Thousands"),
+    (100_000,     "hundred-thousand", "hundred-thousands", "Hundred Thousands"),
+    (1_000_000,   "million",          "millions",          "Millions"),
+    (10_000_000,  "ten-million",      "ten-millions",      "Ten Millions"),
+    (100_000_000, "hundred-million",  "hundred-millions",  "Hundred Millions"),
+]
+
+
+def _fmt(n):
+    return f"{n:,}"
+
+
+def pv_bundle(rng, args, count=None):
+    """Ten of a place makes the next place: 10 hundreds = 1,000, etc."""
+    return [{"kind": "qa", "text": f"10 {t[2]} =", "answer": _fmt(t[0] * 10)}
+            for t in PLACES[:8]]            # ones .. ten-millions
+
+
+def pv_howmany(rng, args, count=None):
+    """The inverse ladder: how many of a place make the next one up (always 10)."""
+    out = []
+    for i in range(1, 9):                   # bigger = tens .. hundred-millions
+        smaller, bigger = PLACES[i - 1], PLACES[i]
+        out.append({"kind": "qa",
+                    "text": f"How many {smaller[2]} make one {bigger[1]}?",
+                    "answer": "10"})
+    return out
+
+
+def pv_howmuch(rng, args, count=None):
+    """What is n of a place worth? 7 ten-thousands = 70,000."""
+    out = []
+    for _ in range(count or 9):
+        t = PLACES[rng.randint(2, 7)]       # hundreds .. ten-millions
+        n = rng.randint(2, 9)
+        out.append({"kind": "qa", "text": f"{n} {t[2]} =",
+                    "answer": _fmt(n * t[0])})
+    return out
+
+
+def pv_build(rng, args, count=None):
+    """Compose a number from its places: 4 thousands + 5 hundreds + ... = 4,5xx."""
+    out = []
+    for _ in range(count or 6):
+        high = rng.randint(3, 5)            # thousands .. hundred-thousands
+        terms, total = [], 0
+        for idx in range(high, high - 4, -1):
+            d = rng.randint(1, 9)
+            terms.append(f"{d} {PLACES[idx][2]}")
+            total += d * PLACES[idx][0]
+        out.append({"kind": "qa", "text": " + ".join(terms) + " =",
+                    "answer": _fmt(total)})
+    return out
+
+
+def render_pv_chart():
+    cols = list(reversed(PLACES))           # hundred-millions .. ones
+    vals = "".join(f'<td class="pv-v">{_fmt(t[0])}</td>' for t in cols)
+    names = "".join(f'<td class="pv-n">{t[3]}</td>' for t in cols)
+    return f'<table class="pv-chart"><tr>{vals}</tr><tr>{names}</tr></table>'
+
+
 STYLES = {
     "horizontal":     gen_horizontal,
     "stacked":        gen_stacked,
@@ -156,6 +225,7 @@ ALLOWED_OPS = {
     "multiplication": ["x"],
     "fractions":      ["+", "-"],
     "longdivision":   ["/"],
+    "placevalue":     ["+"],     # unused; place value questions have no op
 }
 
 # per-style defaults: (problem count, grid columns, title, subtitle)
@@ -173,6 +243,8 @@ DEFAULTS = {
     # the "combo platter": one sheet with a labeled section of every type
     "all": (None, None, "Mixed Math Practice",
             "Solve each problem. Show your work where you need to."),
+    "placevalue": (None, None, "Place Value Practice",
+                   "Each place is 10 times the place to its right."),
 }
 ALLOWED_OPS["all"] = ["+", "-", "x", "/"]
 
@@ -194,6 +266,22 @@ ALL_SECTIONS = [
     {"heading": "Part E — Long Division (3-digit ÷ 1-digit, no remainders)",
      "style": "longdivision", "count": 8, "cols": 4},
 ]
+
+# sections for the "placevalue" style. These use a `builder` (a function that
+# returns a ready list of problems) instead of a per-item generator.
+PV_SECTIONS = [
+    {"heading": "Part 1 — Ten of a place makes the next place",
+     "builder": pv_bundle, "cols": 2},
+    {"heading": "Part 2 — How many make one?",
+     "builder": pv_howmany, "cols": 2},
+    {"heading": "Part 3 — How much is it worth?",
+     "builder": pv_howmuch, "count": 9, "cols": 3},
+    {"heading": "Part 4 — Build the number",
+     "builder": pv_build, "count": 6, "cols": 2},
+]
+
+# styles whose pages are built from labeled sections rather than one grid
+SECTIONED = {"all": ALL_SECTIONS, "placevalue": PV_SECTIONS}
 
 
 def build_problems(rng, args):
@@ -291,6 +379,24 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
     color: #444; text-transform: uppercase; letter-spacing: 0.3px;
 }
 
+/* place value: question with a fill-in blank */
+.cell.qa { align-items: baseline; font-size: 16px; min-height: 26px; }
+.qa-blank { display: inline-block; min-width: 90px; border-bottom: 1px solid #888;
+            margin-left: 8px; }
+.qa-ans { color: #c0392b; font-weight: bold; margin-left: 8px; }
+
+/* place value reference chart across the top */
+.pv-chart {
+    border-collapse: collapse; width: 100%; table-layout: fixed;
+    margin: 4px 0 14px; font-family: -apple-system, system-ui, sans-serif;
+}
+.pv-chart td {
+    border: 1px solid #999; text-align: center; padding: 3px 2px;
+    font-size: 9px; line-height: 1.15; word-wrap: break-word;
+}
+.pv-chart .pv-v { font-weight: bold; }
+.pv-chart .pv-n { color: #555; }
+
 .key-tag { color: #c0392b; }
 @media print { .no-print { display: none; } body { margin: 0; } }
 .no-print {
@@ -383,8 +489,17 @@ def render_longdiv(p, show):
     )
 
 
+def render_qa(p, show):
+    """A question with a blank to fill in (place value). Answer shown on key."""
+    if show:
+        ans = f'<span class="qa-ans">{p["answer"]}</span>'
+    else:
+        ans = '<span class="qa-blank"></span>'
+    return f'<span class="qa-text">{p["text"]}</span>{ans}'
+
+
 RENDERERS = {"h": render_horizontal, "stack": render_stack,
-             "frac": render_frac, "longdiv": render_longdiv}
+             "frac": render_frac, "longdiv": render_longdiv, "qa": render_qa}
 
 
 def render_cell(p, index, show):
@@ -448,7 +563,7 @@ def render_document(problems, args):
     return wrap_html(args.title, pages, getattr(args, "compact", False))
 
 
-# --- combined "all" sheet: a labeled section of every problem type ----------
+# --- sheets built from labeled sections (the "all" and "placevalue" styles) --
 
 def _balanced_ops(rng, ops, count):
     """A length-`count` list of ops, split as evenly as possible, shuffled."""
@@ -457,22 +572,28 @@ def _balanced_ops(rng, ops, count):
     return seq
 
 
-def build_all_sections(rng, args):
-    """Return [(heading, [problems], columns), ...] for the combo sheet."""
+def build_sections(rng, args, specs):
+    """Return [(heading, [problems], columns), ...] from a section spec list.
+
+    A spec either supplies a `builder` (a function returning a list of problems)
+    or a `style` + `count` to generate from, optionally `balanced`."""
     sections = []
-    for spec in ALL_SECTIONS:
+    for spec in specs:
         sec = copy.copy(args)
-        sec.style = spec["style"]
-        sec.ops = ALLOWED_OPS[spec["style"]]
         for key, val in spec.get("overrides", {}).items():
             setattr(sec, key, val)
-        gen = STYLES[spec["style"]]
-        count = spec["count"]
-        if spec.get("balanced"):
-            problems = [gen(rng, sec, op)
-                        for op in _balanced_ops(rng, sec.ops, count)]
+        if "builder" in spec:
+            problems = spec["builder"](rng, sec, spec.get("count"))
         else:
-            problems = [gen(rng, sec) for _ in range(count)]
+            sec.style = spec["style"]
+            sec.ops = ALLOWED_OPS[spec["style"]]
+            gen = STYLES[spec["style"]]
+            count = spec["count"]
+            if spec.get("balanced"):
+                problems = [gen(rng, sec, op)
+                            for op in _balanced_ops(rng, sec.ops, count)]
+            else:
+                problems = [gen(rng, sec) for _ in range(count)]
         sections.append((spec["heading"], problems, spec["cols"]))
     return sections
 
@@ -489,9 +610,11 @@ def render_section(heading, problems, columns, show):
 def render_all_page(sections, args, label, show):
     body = "".join(render_section(h, p, c, show) for h, p, c in sections)
     header = render_header(args, label, args.subtitle if not show else "Answer Key")
+    chart = render_pv_chart() if args.style == "placevalue" else ""
     return f"""
     <div class="page">
         {header}
+        {chart}
         {body}
     </div>
     """
@@ -513,10 +636,11 @@ def parse_args():
     p = argparse.ArgumentParser(
         description="Generate printable math worksheets in several styles.",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("--style", choices=list(STYLES) + ["all"],
+    p.add_argument("--style", choices=list(STYLES) + ["all", "placevalue"],
                    default="horizontal",
-                   help="worksheet style, or 'all' for a combined sheet with a "
-                        "section of every type (default: horizontal)")
+                   help="worksheet style; 'all' is a combined sheet with a "
+                        "section of every type and 'placevalue' drills place "
+                        "value (default: horizontal)")
     p.add_argument("--count", type=int, default=None,
                    help="problems per worksheet (default depends on style)")
     p.add_argument("--columns", type=int, default=None,
@@ -607,8 +731,9 @@ def main():
     written = []
     for n in range(1, args.sets + 1):
         rng = random.Random(base_seed + n)
-        if args.style == "all":
-            html = render_all_document(build_all_sections(rng, args), args)
+        if args.style in SECTIONED:
+            sections = build_sections(rng, args, SECTIONED[args.style])
+            html = render_all_document(sections, args)
         else:
             html = render_document(build_problems(rng, args), args)
         suffix = f"-{n}" if args.sets > 1 else ""
