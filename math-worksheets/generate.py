@@ -217,7 +217,7 @@ def pv_dissect(rng, args, count=None):
         smaller = larger - gap
         n = rng.randint(2, 9)
         ratio = PLACES[larger][0] // PLACES[smaller][0]
-        out.append({"kind": "qa",
+        out.append({"kind": "qa", "space": True,
                     "text": (f"How many {PLACES[smaller][2]} are in "
                              f"{NUM_WORDS[n]} {PLACES[larger][2]}?"),
                     "answer": _fmt(n * ratio)})
@@ -405,10 +405,17 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .page > .section-title:first-of-type { margin-top: 6px; }
 
 /* place value: question with a fill-in blank */
-.cell.qa { align-items: baseline; font-size: 16px; min-height: 26px; }
+.cell.qa { align-items: flex-start; font-size: 16px; min-height: 26px; }
 .qa-blank { display: inline-block; min-width: 90px; border-bottom: 1px solid #888;
             margin-left: 8px; }
 .qa-ans { color: #c0392b; font-weight: bold; margin-left: 8px; }
+/* an open box under the question to work in and solve */
+.qa-body { display: flex; flex-direction: column; flex: 1; }
+.qa-space {
+    border: 1px solid #bbb; border-radius: 4px; min-height: 52px;
+    margin-top: 4px; padding: 3px 6px;
+}
+.qa-space .qa-ans { margin-left: 0; }
 
 /* place value reference chart across the top */
 .pv-chart {
@@ -527,11 +534,14 @@ def render_longdiv(p, show):
 
 
 def render_qa(p, show):
-    """A question with a blank to fill in (place value). Answer shown on key."""
-    if show:
-        ans = f'<span class="qa-ans">{p["answer"]}</span>'
-    else:
-        ans = '<span class="qa-blank"></span>'
+    """A place value question. With "space" it gets an open box to work in and
+    solve; otherwise a short inline fill-in blank. Answer shown on the key."""
+    if p.get("space"):
+        inner = f'<span class="qa-ans">{p["answer"]}</span>' if show else ""
+        return (f'<div class="qa-body"><div class="qa-text">{p["text"]}</div>'
+                f'<div class="qa-space">{inner}</div></div>')
+    ans = (f'<span class="qa-ans">{p["answer"]}</span>' if show
+           else '<span class="qa-blank"></span>')
     return f'<span class="qa-text">{p["text"]}</span>{ans}'
 
 
