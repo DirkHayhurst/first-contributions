@@ -203,8 +203,29 @@ def pv_build(rng, args, count=None):
     return out
 
 
-def render_pv_chart():
-    cols = list(reversed(PLACES))           # hundred-millions .. ones
+NUM_WORDS = ["zero", "one", "two", "three", "four",
+             "five", "six", "seven", "eight", "nine"]
+
+
+def pv_dissect(rng, args, count=None):
+    """How many of a smaller place are inside n of a larger place?
+    e.g. 'How many tens are in five thousands?' -> 500."""
+    out = []
+    for _ in range(count or 10):
+        larger = rng.randint(2, 6)              # hundreds .. millions
+        gap = rng.randint(1, min(3, larger))
+        smaller = larger - gap
+        n = rng.randint(2, 9)
+        ratio = PLACES[larger][0] // PLACES[smaller][0]
+        out.append({"kind": "qa",
+                    "text": (f"How many {PLACES[smaller][2]} are in "
+                             f"{NUM_WORDS[n]} {PLACES[larger][2]}?"),
+                    "answer": _fmt(n * ratio)})
+    return out
+
+
+def render_pv_chart(places=None):
+    cols = list(reversed(places or PLACES))     # largest place .. ones
     vals = "".join(f'<td class="pv-v">{_fmt(t[0])}</td>' for t in cols)
     names = "".join(f'<td class="pv-n">{t[3]}</td>' for t in cols)
     return f'<table class="pv-chart"><tr>{vals}</tr><tr>{names}</tr></table>'
@@ -265,6 +286,8 @@ ALL_SECTIONS = [
      "overrides": {"frac_mixed_prob": 0.6}},
     {"heading": "Part E — Long Division (3-digit ÷ 1-digit, no remainders)",
      "style": "longdivision", "count": 8, "cols": 4},
+    {"heading": "Part F — Number Places (use the chart to help you)",
+     "builder": pv_dissect, "count": 10, "cols": 2, "chart": 7},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
@@ -358,7 +381,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .ans-frac .fr .top { border-color: #c0392b; }
 
 /* long division -- divisor ) dividend with the quotient above the bar */
-.cell.longdiv { min-height: 96px; }
+.cell.longdiv { min-height: 150px; }
 .ld { display: inline-flex; align-items: flex-end;
       font-family: 'Courier New', Courier, monospace; font-size: 20px; }
 .ld-divisor { padding: 0 4px 2px 0; }
@@ -423,7 +446,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
 .compact .cell.frac { min-height: 42px; }
-.compact .cell.longdiv { min-height: 62px; }
+.compact .cell.longdiv { min-height: 120px; }
 .compact .ld { font-size: 17px; }
 """
 
@@ -613,23 +636,27 @@ def build_sections(rng, args, specs):
                             for op in _balanced_ops(rng, sec.ops, count)]
             else:
                 problems = [gen(rng, sec) for _ in range(count)]
-        sections.append((spec["heading"], problems, spec["cols"]))
+        chart_n = spec.get("chart")
+        chart = PLACES[:chart_n] if chart_n else None
+        sections.append((spec["heading"], problems, spec["cols"], chart))
     return sections
 
 
-def render_section(heading, problems, columns, show):
+def render_section(heading, problems, columns, show, chart=None):
     rows = -(-len(problems) // columns)
     field = _stack_field(problems)
     cells = "".join(render_cell(p, i, show, field)
                     for i, p in enumerate(problems, 1))
     grid_style = (f"grid-template-columns: repeat({columns}, 1fr);"
                   f"grid-template-rows: repeat({rows}, auto);")
-    return (f'<div class="section-title">{heading}</div>'
+    chart_html = render_pv_chart(chart) if chart else ""
+    return (f'<div class="section-title">{heading}</div>{chart_html}'
             f'<div class="grid" style="{grid_style}">{cells}</div>')
 
 
 def render_all_page(sections, args, label, show):
-    body = "".join(render_section(h, p, c, show) for h, p, c in sections)
+    body = "".join(render_section(h, p, c, show, ch)
+                   for h, p, c, ch in sections)
     header = render_header(args, label, args.subtitle if not show else "Answer Key")
     chart = render_pv_chart() if args.style == "placevalue" else ""
     return f"""
