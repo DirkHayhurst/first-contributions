@@ -207,21 +207,64 @@ NUM_WORDS = ["zero", "one", "two", "three", "four",
              "five", "six", "seven", "eight", "nine"]
 
 
-def pv_dissect(rng, args, count=None):
+def _q_dissect(rng):
     """How many of a smaller place are inside n of a larger place?
     e.g. 'How many tens are in five thousands?' -> 500."""
-    out = []
-    for _ in range(count or 10):
-        larger = rng.randint(2, 6)              # hundreds .. millions
-        gap = rng.randint(1, min(3, larger))
-        smaller = larger - gap
-        n = rng.randint(2, 9)
-        ratio = PLACES[larger][0] // PLACES[smaller][0]
-        out.append({"kind": "qa", "space": True,
-                    "text": (f"How many {PLACES[smaller][2]} are in "
-                             f"{NUM_WORDS[n]} {PLACES[larger][2]}?"),
-                    "answer": _fmt(n * ratio)})
-    return out
+    larger = rng.randint(2, 6)                  # hundreds .. millions
+    gap = rng.randint(1, min(3, larger))
+    smaller = larger - gap
+    n = rng.randint(2, 9)
+    ratio = PLACES[larger][0] // PLACES[smaller][0]
+    return {"kind": "qa", "space": True,
+            "text": (f"How many {PLACES[smaller][2]} are in "
+                     f"{NUM_WORDS[n]} {PLACES[larger][2]}?"),
+            "answer": _fmt(n * ratio)}
+
+
+def _q_digit_in_place(rng):
+    """Identify the digit in a named place, e.g. 'In 5,897, how many hundreds
+    are in the hundreds place?' -> 8."""
+    ndigits = rng.randint(3, 6)
+    number = rng.randint(10 ** (ndigits - 1), 10 ** ndigits - 1)
+    idx = rng.randint(1, ndigits - 1)           # tens and up (skip trivial ones)
+    place = PLACES[idx]
+    digit = (number // place[0]) % 10
+    return {"kind": "qa", "space": True,
+            "text": (f"In {_fmt(number)}, how many {place[2]} are in the "
+                     f"{place[2]} place?"),
+            "answer": str(digit)}
+
+
+def _q_count_places(rng):
+    """How many digits/places does a number have?"""
+    ndigits = rng.randint(4, 7)
+    number = rng.randint(10 ** (ndigits - 1), 10 ** ndigits - 1)
+    return {"kind": "qa", "space": True,
+            "text": f"How many places (digits) does {_fmt(number)} have?",
+            "answer": str(ndigits)}
+
+
+def _q_regroup(rng):
+    """Add one unit to a number full of 9s so it regroups, and explain why.
+    e.g. 'Add 1 more one to 99. Write the new number. Why did it change?'"""
+    k = rng.randint(1, 3)                        # trailing nines
+    lead = "" if k == 3 else str(rng.randint(1, 9))
+    number = int(lead + "9" * k)
+    return {"kind": "qa", "space": True, "why": True,
+            "text": (f"Add 1 more one to {_fmt(number)}. Write the new number. "
+                     f"Why did it change that way?"),
+            "answer": _fmt(number + 1)}
+
+
+def pv_dissect(rng, args, count=None):
+    """Part F mix: identifying digits in places, bundling, counting places,
+    and regrouping 'why' questions -- all with open space to work in."""
+    items = ([_q_digit_in_place(rng) for _ in range(3)]
+             + [_q_dissect(rng) for _ in range(3)]
+             + [_q_count_places(rng) for _ in range(2)]
+             + [_q_regroup(rng) for _ in range(2)])
+    rng.shuffle(items)
+    return items
 
 
 def render_pv_chart(places=None):
@@ -229,6 +272,44 @@ def render_pv_chart(places=None):
     vals = "".join(f'<td class="pv-v">{_fmt(t[0])}</td>' for t in cols)
     names = "".join(f'<td class="pv-n">{t[3]}</td>' for t in cols)
     return f'<table class="pv-chart"><tr>{vals}</tr><tr>{names}</tr></table>'
+
+
+# A full place-value table: period groups across the top (Trillions ... Ones),
+# rotated place labels, tall open columns to write in, and a digit row.
+PV_PERIODS = [
+    ("Trillions", ["Hundred Trillions", "Ten Trillions", "Trillions"]),
+    ("Billions",  ["Hundred Billions", "Ten Billions", "Billions"]),
+    ("Millions",  ["Hundred Millions", "Ten Millions", "Millions"]),
+    ("Thousands", ["Hundred Thousands", "Ten Thousands", "Thousands"]),
+    ("Ones",      ["Hundreds", "Tens", "Ones"]),
+]
+
+
+def render_pv_table(number=None):
+    """Render the wide place value chart (like a classroom poster). If `number`
+    is given, its digits are placed in the bottom row; otherwise it's blank so
+    the student can write a number and work in the open columns."""
+    labels = [lbl for _, group in PV_PERIODS for lbl in group]
+    n_cols = len(labels)                                   # 15 places
+    digits = list(str(number)) if number is not None else []
+    digits = [""] * (n_cols - len(digits)) + digits        # right-align
+
+    title = f'<tr><td class="pvt-title" colspan="{n_cols}">Place Value</td></tr>'
+
+    periods = "".join(
+        f'<td class="pvt-period pvt-grp" colspan="3">{name}</td>'
+        for name, _ in PV_PERIODS)
+    period_row = f"<tr>{periods}</tr>"
+
+    label_cells, digit_cells = "", ""
+    for i, lbl in enumerate(labels):
+        grp = " pvt-grp" if i % 3 == 0 else ""
+        label_cells += f'<td class="pvt-col{grp}"><span class="pvt-label">{lbl}</span></td>'
+        digit_cells += f'<td class="pvt-digit{grp}">{digits[i] or "&nbsp;"}</td>'
+    label_row = f"<tr>{label_cells}</tr>"
+    digit_row = f"<tr>{digit_cells}</tr>"
+
+    return f'<table class="pvt">{title}{period_row}{label_row}{digit_row}</table>'
 
 
 STYLES = {
@@ -286,8 +367,8 @@ ALL_SECTIONS = [
      "overrides": {"frac_mixed_prob": 0.6}},
     {"heading": "Part E — Long Division (3-digit ÷ 1-digit, no remainders)",
      "style": "longdivision", "count": 8, "cols": 4},
-    {"heading": "Part F — Number Places (use the chart to help you)",
-     "builder": pv_dissect, "count": 10, "cols": 2, "chart": 7},
+    {"heading": "Part F — Number Places (write each number in the chart to help you)",
+     "builder": pv_dissect, "count": 10, "cols": 2, "table": True},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
@@ -412,10 +493,28 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 /* an open box under the question to work in and solve */
 .qa-body { display: flex; flex-direction: column; flex: 1; }
 .qa-space {
-    border: 1px solid #bbb; border-radius: 4px; min-height: 52px;
+    border: 1px solid #bbb; border-radius: 4px; min-height: 56px;
     margin-top: 4px; padding: 3px 6px;
 }
+.qa-space-tall { min-height: 84px; }   /* room to write the number and the "why" */
 .qa-space .qa-ans { margin-left: 0; }
+
+/* full place value table (period groups + rotated labels + open columns) */
+.pvt {
+    border-collapse: collapse; width: 100%; table-layout: fixed;
+    margin: 6px 0 14px; font-family: -apple-system, system-ui, sans-serif;
+}
+.pvt td { border: 1px solid #111; text-align: center; }
+.pvt .pvt-grp { border-left-width: 3px; }
+.pvt-title { font-size: 16px; font-weight: bold; padding: 5px; }
+.pvt-period { font-size: 13px; font-weight: bold; padding: 4px 2px; }
+.pvt-col { height: 1.9in; vertical-align: bottom; padding: 4px 0; }
+.pvt-label {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    white-space: nowrap; font-size: 11px; font-weight: bold;
+    display: inline-block;
+}
+.pvt-digit { height: 0.45in; font-size: 18px; font-weight: bold; }
 
 /* place value reference chart across the top */
 .pv-chart {
@@ -455,6 +554,10 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .cell.frac { min-height: 42px; }
 .compact .cell.longdiv { min-height: 120px; }
 .compact .ld { font-size: 17px; }
+.compact .pvt-col { height: 1.5in; }
+.compact .pvt-title { font-size: 14px; padding: 3px; }
+.compact .pvt-period { font-size: 11px; }
+.compact .pvt-label { font-size: 9.5px; }
 """
 
 
@@ -538,8 +641,9 @@ def render_qa(p, show):
     solve; otherwise a short inline fill-in blank. Answer shown on the key."""
     if p.get("space"):
         inner = f'<span class="qa-ans">{p["answer"]}</span>' if show else ""
+        box = "qa-space qa-space-tall" if p.get("why") else "qa-space"
         return (f'<div class="qa-body"><div class="qa-text">{p["text"]}</div>'
-                f'<div class="qa-space">{inner}</div></div>')
+                f'<div class="{box}">{inner}</div></div>')
     ans = (f'<span class="qa-ans">{p["answer"]}</span>' if show
            else '<span class="qa-blank"></span>')
     return f'<span class="qa-text">{p["text"]}</span>{ans}'
@@ -646,27 +750,35 @@ def build_sections(rng, args, specs):
                             for op in _balanced_ops(rng, sec.ops, count)]
             else:
                 problems = [gen(rng, sec) for _ in range(count)]
-        chart_n = spec.get("chart")
-        chart = PLACES[:chart_n] if chart_n else None
-        sections.append((spec["heading"], problems, spec["cols"], chart))
+        if spec.get("table"):
+            extra = ("table", None)
+        elif spec.get("chart"):
+            extra = ("chart", PLACES[:spec["chart"]])
+        else:
+            extra = None
+        sections.append((spec["heading"], problems, spec["cols"], extra))
     return sections
 
 
-def render_section(heading, problems, columns, show, chart=None):
+def render_section(heading, problems, columns, show, extra=None):
     rows = -(-len(problems) // columns)
     field = _stack_field(problems)
     cells = "".join(render_cell(p, i, show, field)
                     for i, p in enumerate(problems, 1))
     grid_style = (f"grid-template-columns: repeat({columns}, 1fr);"
                   f"grid-template-rows: repeat({rows}, auto);")
-    chart_html = render_pv_chart(chart) if chart else ""
-    return (f'<div class="section-title">{heading}</div>{chart_html}'
+    header = ""
+    if extra and extra[0] == "table":
+        header = render_pv_table()
+    elif extra and extra[0] == "chart":
+        header = render_pv_chart(extra[1])
+    return (f'<div class="section-title">{heading}</div>{header}'
             f'<div class="grid" style="{grid_style}">{cells}</div>')
 
 
 def render_all_page(sections, args, label, show):
-    body = "".join(render_section(h, p, c, show, ch)
-                   for h, p, c, ch in sections)
+    body = "".join(render_section(h, p, c, show, ex)
+                   for h, p, c, ex in sections)
     header = render_header(args, label, args.subtitle if not show else "Answer Key")
     chart = render_pv_chart() if args.style == "placevalue" else ""
     return f"""
