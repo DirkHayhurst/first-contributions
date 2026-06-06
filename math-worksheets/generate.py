@@ -256,10 +256,10 @@ ALL_SECTIONS = [
      "style": "horizontal", "count": 20, "cols": 4},
     {"heading": "Part B — Three-Digit Addition &amp; Subtraction",
      "style": "stacked", "count": 8, "cols": 4, "balanced": True},
-    {"heading": "Part C — Multiplication (2–5 digits × 1–2 digits)",
+    {"heading": "Part C — Multiplication (2-digit × 2-digit)",
      "style": "multiplication", "count": 8, "cols": 4,
-     "overrides": {"mult_top_min": 10, "mult_top_max": 99999,
-                   "mult_bot_min": 2, "mult_bot_max": 99}},
+     "overrides": {"mult_top_min": 12, "mult_top_max": 99,
+                   "mult_bot_min": 12, "mult_bot_max": 99}},
     {"heading": "Part D — Fractions &amp; Mixed Numbers (same denominator)",
      "style": "fractions", "count": 8, "cols": 3,
      "overrides": {"frac_mixed_prob": 0.6}},
@@ -373,11 +373,13 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
     letter-spacing: 2px;
 }
 
-/* section headings on the combined "all" sheet -- kept small and unobtrusive */
+/* section headings on the combined "all" sheet -- kept small and unobtrusive,
+   with clear space above to separate one section from the next */
 .section-title {
-    font-size: 11px; font-weight: bold; margin: 6px 0 2px;
+    font-size: 11px; font-weight: bold; margin: 20px 0 3px;
     color: #444; text-transform: uppercase; letter-spacing: 0.3px;
 }
+.page > .section-title:first-of-type { margin-top: 6px; }
 
 /* place value: question with a fill-in blank */
 .cell.qa { align-items: baseline; font-size: 16px; min-height: 26px; }
@@ -415,12 +417,13 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .page { padding: 0.3in 0.45in; min-height: 0; }
 .compact .grid { gap: 3px 12px; }
 .compact .cell { font-size: 15px; padding: 1px; }
-.compact .section-title { font-size: 9.5px; margin: 3px 0 1px; }
-.compact .cell.stack { min-height: 58px; }
-.compact .cell.stack.work { min-height: 130px; }   /* freehand working space */
+.compact .section-title { font-size: 10px; margin: 13px 0 2px; }
+.compact .page > .section-title:first-of-type { margin-top: 2px; }
+.compact .cell.stack { min-height: 56px; }
+.compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
-.compact .cell.frac { min-height: 44px; }
-.compact .cell.longdiv { min-height: 64px; }
+.compact .cell.frac { min-height: 42px; }
+.compact .cell.longdiv { min-height: 62px; }
 .compact .ld { font-size: 17px; }
 """
 
@@ -430,9 +433,12 @@ def render_horizontal(p, show):
     return f'<span class="prob">{p["text"]}</span>{ans}'
 
 
-def render_stack(p, show):
+def render_stack(p, show, field=None):
     a, b, op, ans = p["a"], p["b"], p["op"], p["answer"]
-    field = max(len(str(a)), len(str(b)), len(str(ans)))
+    # `field` is shared across a whole section so every problem aligns the same;
+    # fall back to the problem's own width when rendered on its own.
+    if field is None:
+        field = max(len(str(a)), len(str(b)), len(str(ans)))
     top = f"  {str(a).rjust(field)}"        # 2 cols reserved for the operator
     bot = f"{op} {str(b).rjust(field)}"
     ans_line = f"  {str(ans).rjust(field)}" if show else ""
@@ -442,6 +448,14 @@ def render_stack(p, show):
         f'<pre class="ans-slot">{ans_line}</pre>'
         '</div>'
     )
+
+
+def _stack_field(problems):
+    """The widest digit count among stacked problems, so a whole section can
+    share one alignment width (keeps every problem lined up in its column)."""
+    widths = [max(len(str(p["a"])), len(str(p["b"])), len(str(p["answer"])))
+              for p in problems if p["kind"] == "stack"]
+    return max(widths) if widths else None
 
 
 def _fr(num, den):
@@ -502,8 +516,11 @@ RENDERERS = {"h": render_horizontal, "stack": render_stack,
              "frac": render_frac, "longdiv": render_longdiv, "qa": render_qa}
 
 
-def render_cell(p, index, show):
-    body = RENDERERS[p["kind"]](p, show)
+def render_cell(p, index, show, field=None):
+    if p["kind"] == "stack":
+        body = render_stack(p, show, field)
+    else:
+        body = RENDERERS[p["kind"]](p, show)
     cls = p["kind"]
     if p["kind"] == "stack" and p.get("work"):
         cls += " work"
@@ -533,7 +550,9 @@ def render_header(args, label, subtitle):
 
 def render_page(problems, args, label, show):
     rows = -(-args.count // args.columns)  # ceil -> rows per column
-    cells = "".join(render_cell(p, i, show) for i, p in enumerate(problems, 1))
+    field = _stack_field(problems)
+    cells = "".join(render_cell(p, i, show, field)
+                    for i, p in enumerate(problems, 1))
     grid_style = (f"grid-template-columns: repeat({args.columns}, 1fr);"
                   f"grid-template-rows: repeat({rows}, auto);")
     header = render_header(args, label, args.subtitle if not show else "Answer Key")
@@ -600,7 +619,9 @@ def build_sections(rng, args, specs):
 
 def render_section(heading, problems, columns, show):
     rows = -(-len(problems) // columns)
-    cells = "".join(render_cell(p, i, show) for i, p in enumerate(problems, 1))
+    field = _stack_field(problems)
+    cells = "".join(render_cell(p, i, show, field)
+                    for i, p in enumerate(problems, 1))
     grid_style = (f"grid-template-columns: repeat({columns}, 1fr);"
                   f"grid-template-rows: repeat({rows}, auto);")
     return (f'<div class="section-title">{heading}</div>'
