@@ -48,7 +48,41 @@ DIV = "÷"    # ÷
 # Generators take an optional forced `op`; when None they pick one at random
 # from args.ops. The forced op lets the combo sheet balance + and - evenly.
 
+def _h_add3(rng):
+    """Standard 3-digit addition with the sum kept at or below 999."""
+    a = rng.randint(100, 899)
+    b = rng.randint(100, 999 - a)
+    return {"kind": "h", "text": f"{a} + {b} =", "answer": a + b}
+
+
+def _h_sub_noborrow(rng):
+    """3-digit subtraction with no borrowing ('no pass back') -- each digit of
+    the top number is >= the matching digit below it."""
+    h = rng.randint(1, 9)
+    t = rng.randint(0, 9)
+    o = rng.randint(0, 9)
+    top = 100 * h + 10 * t + o
+    bot = 100 * rng.randint(1, h) + 10 * rng.randint(0, t) + rng.randint(0, o)
+    return {"kind": "h", "text": f"{top} - {bot} =", "answer": top - bot}
+
+
+def _h_div_by_ten(rng):
+    """A 3- or 4-digit multiple of 10 divided by 10 -- shows how many tens are
+    in a big number, e.g. 3450 / 10 = 345."""
+    quotient = rng.randint(10, 999)            # 2- or 3-digit quotient
+    number = quotient * 10                      # 3- or 4-digit multiple of 10
+    return {"kind": "h", "text": f"{number} {DIV} 10 =", "answer": quotient}
+
+
 def gen_horizontal(rng, args, op=None):
+    # mix in some 3-digit place-builder problems when enabled
+    if op is None and rng.random() < getattr(args, "three_digit_prob", 0.0):
+        r = rng.random()
+        if r < 0.4:
+            return _h_add3(rng)
+        if r < 0.8:
+            return _h_sub_noborrow(rng)
+        return _h_div_by_ten(rng)
     op = op or rng.choice(args.ops)
     if op == "+":
         a, b = rng.randint(0, args.max_add), rng.randint(0, args.max_add)
@@ -837,6 +871,12 @@ def parse_args():
                    help="largest number used in horizontal addition (20)")
     p.add_argument("--max-sub", type=int, default=20,
                    help="largest number used in horizontal subtraction (20)")
+    p.add_argument("--three-digit", action="store_true",
+                   help="mix in 3-digit problems: standard addition (sum <= 999) "
+                        "and no-borrow subtraction, to reinforce place value")
+    p.add_argument("--three-digit-prob", type=float, default=0.35,
+                   help="fraction of horizontal problems that are 3-digit when "
+                        "--three-digit is on (default 0.35)")
     # stacked add/sub ranges
     p.add_argument("--stack-min", type=int, default=100,
                    help="smallest operand for stacked add/sub (100)")
@@ -889,6 +929,9 @@ def finalize_args(args):
     args.ops = [o for o in chosen if o in allowed] or allowed
     # probability a fraction problem is a mixed number (combo overrides this)
     args.frac_mixed_prob = 0.6 if args.mixed_numbers else 0.0
+    # 3-digit place-builder problems only when --three-digit is set
+    if not args.three_digit:
+        args.three_digit_prob = 0.0
     return args
 
 
