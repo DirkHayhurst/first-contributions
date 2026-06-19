@@ -163,6 +163,37 @@ def gen_fraction(rng, args, op=None):
             "op": op, "ans_whole": ans_whole, "ans_num": ans_num}
 
 
+def frac_common_denom(rng, args, count=None):
+    """Unlike-denominator add/subtract where one denominator is a 2x or 3x
+    multiple of the other, so the common denominator is just the larger one
+    (only one fraction needs converting). Results stay proper."""
+    out = []
+    for _ in range(count or 8):
+        d1 = rng.randint(2, 6)
+        m = rng.choice([2, 3])
+        d2 = d1 * m                              # common denominator
+        op = rng.choice(["+", "-"])
+        if op == "+":
+            p = rng.randint(1, d1 - 1)           # p/d1  ->  (p*m)/d2
+            q = rng.randint(1, d2 - 1 - p * m)   # q/d2, keep sum proper
+            n1, dn1, n2, dn2 = p, d1, q, d2
+            ans_num = p * m + q
+        else:
+            p = rng.randint(1, d1 - 1)
+            q = rng.randint(1, d2 - 1)
+            conv = p * m
+            if conv == q:                        # avoid a zero answer
+                q = q - 1 if q > 1 else q + 1
+            if conv > q:                         # show the larger value first
+                n1, dn1, n2, dn2, ans_num = p, d1, q, d2, conv - q
+            else:
+                n1, dn1, n2, dn2, ans_num = q, d2, p, d1, q - conv
+        out.append({"kind": "frac2", "space": True, "op": op,
+                    "n1": n1, "d1": dn1, "n2": n2, "d2": dn2,
+                    "ans_num": ans_num, "ans_den": d2})
+    return out
+
+
 def gen_longdiv(rng, args, op=None):
     """Long division, drawn in the bracket form. Builds the dividend from a
     known quotient so it divides evenly (no remainder, no decimals)."""
@@ -403,6 +434,8 @@ ALL_SECTIONS = [
      "style": "longdivision", "count": 8, "cols": 4},
     {"heading": "Part F — Number Places (write each number in the chart to help you)",
      "builder": pv_dissect, "count": 10, "cols": 2, "table": True},
+    {"heading": "Part G — Fractions: Find a Common Denominator, then Add or Subtract",
+     "builder": frac_common_denom, "count": 8, "cols": 2},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
@@ -482,6 +515,8 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 
 /* fractions */
 .cell.frac { align-items: center; min-height: 70px; white-space: nowrap; }
+.cell.frac2 { align-items: flex-start; min-height: 86px; }
+.frac-eq { display: flex; align-items: center; white-space: nowrap; }
 .fr { display: inline-flex; flex-direction: column; align-items: center;
       margin: 0 3px; line-height: 1.05; vertical-align: middle; }
 .fr .top { border-bottom: 2px solid #111; padding: 0 6px; }
@@ -656,6 +691,18 @@ def render_frac(p, show):
             f'<span class="eq">=</span>{answer}')
 
 
+def render_frac2(p, show):
+    """Two fractions with unlike denominators, the equation on top and an open
+    box below to find the common denominator and work the answer."""
+    op_sym = "+" if p["op"] == "+" else "−"
+    eq = (f'{_fr(p["n1"], p["d1"])}<span class="op">{op_sym}</span>'
+          f'{_fr(p["n2"], p["d2"])}<span class="eq">=</span>')
+    inner = (f'<span class="ans-frac">{_fr(p["ans_num"], p["ans_den"])}</span>'
+             if show else "")
+    return (f'<div class="qa-body"><div class="frac-eq">{eq}</div>'
+            f'<div class="qa-space">{inner}</div></div>')
+
+
 def render_longdiv(p, show):
     """Long division in bracket form: divisor ) dividend, with the quotient
     sitting above the bar (shown only on the answer key)."""
@@ -684,7 +731,8 @@ def render_qa(p, show):
 
 
 RENDERERS = {"h": render_horizontal, "stack": render_stack,
-             "frac": render_frac, "longdiv": render_longdiv, "qa": render_qa}
+             "frac": render_frac, "frac2": render_frac2,
+             "longdiv": render_longdiv, "qa": render_qa}
 
 
 def render_cell(p, index, show, field=None):
