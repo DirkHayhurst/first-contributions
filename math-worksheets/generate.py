@@ -188,7 +188,7 @@ def frac_common_denom(rng, args, count=None):
                 n1, dn1, n2, dn2, ans_num = p, d1, q, d2, conv - q
             else:
                 n1, dn1, n2, dn2, ans_num = q, d2, p, d1, q - conv
-        out.append({"kind": "frac2", "space": True, "op": op,
+        out.append({"kind": "frac2", "op": op,
                     "n1": n1, "d1": dn1, "n2": n2, "d2": dn2,
                     "ans_num": ans_num, "ans_den": d2})
     return out
@@ -274,39 +274,42 @@ NUM_WORDS = ["zero", "one", "two", "three", "four",
 
 def _q_dissect(rng):
     """How many of a smaller place are inside n of a larger place?
-    e.g. 'How many tens are in five thousands?' -> 500."""
+    e.g. 'How many tens are in five thousands?' -> 500. (inline, no box)"""
     larger = rng.randint(2, 6)                  # hundreds .. millions
     gap = rng.randint(1, min(3, larger))
     smaller = larger - gap
     n = rng.randint(2, 9)
     ratio = PLACES[larger][0] // PLACES[smaller][0]
-    return {"kind": "qa", "space": True,
+    return {"kind": "qa",
             "text": (f"How many {PLACES[smaller][2]} are in "
                      f"{NUM_WORDS[n]} {PLACES[larger][2]}?"),
             "answer": _fmt(n * ratio)}
 
 
+def _q_how_many_in_number(rng):
+    """How many of a place are in a big number, e.g. 'How many tens are in
+    12,405?' -> 1,240. (inline word problem, no box)"""
+    idx = rng.randint(1, 4)                      # tens .. ten-thousands
+    place = PLACES[idx]
+    ndigits = rng.randint(idx + 2, 7)
+    number = rng.randint(10 ** (ndigits - 1), 10 ** ndigits - 1)
+    return {"kind": "qa",
+            "text": f"How many {place[2]} are in {_fmt(number)}?",
+            "answer": _fmt(number // place[0])}
+
+
 def _q_digit_in_place(rng):
     """Identify the digit in a named place, e.g. 'In 5,897, how many hundreds
-    are in the hundreds place?' -> 8."""
+    are in the hundreds place?' -> 8. (inline, no box)"""
     ndigits = rng.randint(3, 6)
     number = rng.randint(10 ** (ndigits - 1), 10 ** ndigits - 1)
     idx = rng.randint(1, ndigits - 1)           # tens and up (skip trivial ones)
     place = PLACES[idx]
     digit = (number // place[0]) % 10
-    return {"kind": "qa", "space": True,
+    return {"kind": "qa",
             "text": (f"In {_fmt(number)}, how many {place[2]} are in the "
                      f"{place[2]} place?"),
             "answer": str(digit)}
-
-
-def _q_count_places(rng):
-    """How many digits/places does a number have?"""
-    ndigits = rng.randint(4, 7)
-    number = rng.randint(10 ** (ndigits - 1), 10 ** ndigits - 1)
-    return {"kind": "qa", "space": True,
-            "text": f"How many places (digits) does {_fmt(number)} have?",
-            "answer": str(ndigits)}
 
 
 def _q_regroup(rng):
@@ -322,11 +325,12 @@ def _q_regroup(rng):
 
 
 def pv_dissect(rng, args, count=None):
-    """Part F mix: identifying digits in places, bundling, counting places,
-    and regrouping 'why' questions -- all with open space to work in."""
-    items = ([_q_digit_in_place(rng) for _ in range(3)]
-             + [_q_dissect(rng) for _ in range(3)]
-             + [_q_count_places(rng) for _ in range(2)]
+    """Part F mix: 'how many X are in this number' stock word problems plus
+    digit-in-place, bundling, and a couple regrouping 'why' questions. Only the
+    'why' ones get a work box; the rest are inline to save space."""
+    items = ([_q_how_many_in_number(rng) for _ in range(4)]
+             + [_q_digit_in_place(rng) for _ in range(2)]
+             + [_q_dissect(rng) for _ in range(2)]
              + [_q_regroup(rng) for _ in range(2)])
     rng.shuffle(items)
     return items
@@ -499,7 +503,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .cell.h { white-space: nowrap; }
 
 /* stacked add/sub & multiplication share the monospace box */
-.cell.stack { min-height: 78px; }
+.cell.stack { min-height: 118px; }         /* room to write the answer & regroup */
 .cell.stack.work { min-height: 160px; }   /* lots of room to work partial products */
 .stack-wrap { display: inline-block; }
 .stack-nums {
@@ -515,8 +519,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 
 /* fractions */
 .cell.frac { align-items: center; min-height: 70px; white-space: nowrap; }
-.cell.frac2 { align-items: flex-start; min-height: 86px; }
-.frac-eq { display: flex; align-items: center; white-space: nowrap; }
+.cell.frac2 { align-items: center; min-height: 86px; white-space: nowrap; }
 .fr { display: inline-flex; flex-direction: column; align-items: center;
       margin: 0 3px; line-height: 1.05; vertical-align: middle; }
 .fr .top { border-bottom: 2px solid #111; padding: 0 6px; }
@@ -617,10 +620,11 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .cell { font-size: 15px; padding: 1px; }
 .compact .section-title { font-size: 10px; margin: 13px 0 2px; }
 .compact .page > .section-title:first-of-type { margin-top: 2px; }
-.compact .cell.stack { min-height: 56px; }
+.compact .cell.stack { min-height: 104px; }    /* room to write the answer & regroup */
 .compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
 .compact .cell.frac { min-height: 42px; }
+.compact .cell.frac2 { min-height: 64px; }     /* a little room to do the math */
 .compact .cell.longdiv { min-height: 120px; }
 .compact .ld { font-size: 17px; }
 .compact .pvt-col { height: 1.5in; }
@@ -692,15 +696,17 @@ def render_frac(p, show):
 
 
 def render_frac2(p, show):
-    """Two fractions with unlike denominators, the equation on top and an open
-    box below to find the common denominator and work the answer."""
+    """Two fractions with unlike denominators, shown inline like Part D (with a
+    little room in the cell to find the common denominator and work)."""
     op_sym = "+" if p["op"] == "+" else "−"
-    eq = (f'{_fr(p["n1"], p["d1"])}<span class="op">{op_sym}</span>'
-          f'{_fr(p["n2"], p["d2"])}<span class="eq">=</span>')
-    inner = (f'<span class="ans-frac">{_fr(p["ans_num"], p["ans_den"])}</span>'
-             if show else "")
-    return (f'<div class="qa-body"><div class="frac-eq">{eq}</div>'
-            f'<div class="qa-space">{inner}</div></div>')
+    left = _fr(p["n1"], p["d1"])
+    right = _fr(p["n2"], p["d2"])
+    if show:
+        answer = f'<span class="ans-frac">{_fr(p["ans_num"], p["ans_den"])}</span>'
+    else:
+        answer = '<span class="ans-frac blank"></span>'
+    return (f'{left}<span class="op">{op_sym}</span>{right}'
+            f'<span class="eq">=</span>{answer}')
 
 
 def render_longdiv(p, show):
