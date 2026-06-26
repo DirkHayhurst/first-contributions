@@ -524,7 +524,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 /* Uniform grid: column-major fill so problems number down each column.
    Fixed rows + per-style cell min-heights keep everything aligned. */
 .grid {
-    display: grid; grid-auto-flow: column; gap: 10px 16px;
+    display: grid; grid-auto-flow: column; gap: 18px 16px;
 }
 .cell {
     display: flex; align-items: flex-start; gap: 6px;
@@ -538,9 +538,9 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .cell.h { white-space: nowrap; }
 
 /* stacked add/sub & multiplication share the monospace box */
-.cell.stack { min-height: 118px; }         /* room to write the answer & regroup */
-.cell.stack.work { min-height: 160px; }   /* lots of room to work partial products */
-.cell.stackn { min-height: 240px; }       /* six addends + carry room above */
+.cell.stack { min-height: 145px; }         /* room to write the answer & regroup */
+.cell.stack.work { min-height: 180px; }   /* lots of room to work partial products */
+.cell.stackn { min-height: 250px; }       /* six addends + carry room above */
 .stack-wrap { display: inline-block; }
 .stack-nums {
     margin: 0; font-family: 'Courier New', Courier, monospace;
@@ -588,10 +588,10 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 /* section headings on the combined "all" sheet -- kept small and unobtrusive,
    with clear space above to separate one section from the next */
 .section-title {
-    font-size: 11px; font-weight: bold; margin: 20px 0 3px;
+    font-size: 11px; font-weight: bold; margin: 26px 0 14px;
     color: #444; text-transform: uppercase; letter-spacing: 0.3px;
 }
-.page > .section-title:first-of-type { margin-top: 6px; }
+.page > .section-title:first-of-type { margin-top: 8px; }
 
 /* place value: question with a fill-in blank */
 .cell.qa { align-items: flex-start; font-size: 16px; min-height: 26px; }
@@ -652,13 +652,13 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .ch-title { font-size: 16px; font-weight: bold; }
 .compact .ch-fields { font-size: 12px; color: #333; }
 .compact .page { padding: 0.3in 0.45in; min-height: 0; }
-.compact .grid { gap: 3px 12px; }
+.compact .grid { gap: 14px 12px; }
 .compact .cell { font-size: 15px; padding: 1px; }
-.compact .section-title { font-size: 10px; margin: 13px 0 2px; }
-.compact .page > .section-title:first-of-type { margin-top: 2px; }
-.compact .cell.stack { min-height: 104px; }    /* room to write the answer & regroup */
-.compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
-.compact .cell.stackn { min-height: 215px; }   /* six addends + carry room above */
+.compact .section-title { font-size: 10px; margin: 18px 0 10px; }
+.compact .page > .section-title:first-of-type { margin-top: 4px; }
+.compact .cell.stack { min-height: 132px; }    /* room to write the answer & regroup */
+.compact .cell.stack.work { min-height: 150px; }   /* freehand working space */
+.compact .cell.stackn { min-height: 230px; }   /* six addends + carry room above */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
 .compact .cell.frac { min-height: 42px; }
 .compact .cell.frac2 { min-height: 64px; }     /* a little room to do the math */
