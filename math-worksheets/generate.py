@@ -194,6 +194,16 @@ def frac_common_denom(rng, args, count=None):
     return out
 
 
+def monster_addition(rng, args, count=None):
+    """'Monster problems': add six 6-digit numbers stacked in a column."""
+    out = []
+    for _ in range(count or 4):
+        nums = [rng.randint(100000, 999999) for _ in range(6)]
+        out.append({"kind": "stackn", "nums": nums, "op": "+",
+                    "answer": sum(nums)})
+    return out
+
+
 def gen_longdiv(rng, args, op=None):
     """Long division, drawn in the bracket form. Builds the dividend from a
     known quotient so it divides evenly (no remainder, no decimals)."""
@@ -440,6 +450,8 @@ ALL_SECTIONS = [
      "builder": pv_dissect, "count": 10, "cols": 2, "table": True},
     {"heading": "Part G — Fractions: Find a Common Denominator, then Add or Subtract",
      "builder": frac_common_denom, "count": 8, "cols": 2},
+    {"heading": "Part H — Monster Problems (add all six numbers)",
+     "builder": monster_addition, "count": 4, "cols": 2},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
@@ -505,6 +517,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 /* stacked add/sub & multiplication share the monospace box */
 .cell.stack { min-height: 118px; }         /* room to write the answer & regroup */
 .cell.stack.work { min-height: 160px; }   /* lots of room to work partial products */
+.cell.stackn { min-height: 210px; }       /* monster column of six addends */
 .stack-wrap { display: inline-block; }
 .stack-nums {
     margin: 0; font-family: 'Courier New', Courier, monospace;
@@ -622,6 +635,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .page > .section-title:first-of-type { margin-top: 2px; }
 .compact .cell.stack { min-height: 104px; }    /* room to write the answer & regroup */
 .compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
+.compact .cell.stackn { min-height: 190px; }   /* monster column of six addends */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
 .compact .cell.frac { min-height: 42px; }
 .compact .cell.frac2 { min-height: 64px; }     /* a little room to do the math */
@@ -656,11 +670,36 @@ def render_stack(p, show, field=None):
     )
 
 
+def render_stackn(p, show, field=None):
+    """A column of several addends (the 'monster' problems): each number
+    right-aligned, the + on the last line, then the answer space."""
+    nums, ans = p["nums"], p["answer"]
+    if field is None:
+        field = max(max(len(str(n)) for n in nums), len(str(ans)))
+    lines = []
+    for i, n in enumerate(nums):
+        prefix = "+ " if i == len(nums) - 1 else "  "
+        lines.append(f"{prefix}{str(n).rjust(field)}")
+    ans_line = f"  {str(ans).rjust(field)}" if show else ""
+    return (
+        '<div class="stack-wrap">'
+        f'<pre class="stack-nums">{chr(10).join(lines)}</pre>'
+        f'<pre class="ans-slot">{ans_line}</pre>'
+        '</div>'
+    )
+
+
 def _stack_field(problems):
     """The widest digit count among stacked problems, so a whole section can
     share one alignment width (keeps every problem lined up in its column)."""
-    widths = [max(len(str(p["a"])), len(str(p["b"])), len(str(p["answer"])))
-              for p in problems if p["kind"] == "stack"]
+    widths = []
+    for p in problems:
+        if p["kind"] == "stack":
+            widths.append(max(len(str(p["a"])), len(str(p["b"])),
+                              len(str(p["answer"]))))
+        elif p["kind"] == "stackn":
+            widths.append(max(max(len(str(n)) for n in p["nums"]),
+                              len(str(p["answer"]))))
     return max(widths) if widths else None
 
 
@@ -744,6 +783,8 @@ RENDERERS = {"h": render_horizontal, "stack": render_stack,
 def render_cell(p, index, show, field=None):
     if p["kind"] == "stack":
         body = render_stack(p, show, field)
+    elif p["kind"] == "stackn":
+        body = render_stackn(p, show, field)
     else:
         body = RENDERERS[p["kind"]](p, show)
     cls = p["kind"]
