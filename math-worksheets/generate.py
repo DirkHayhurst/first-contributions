@@ -194,6 +194,21 @@ def frac_common_denom(rng, args, count=None):
     return out
 
 
+def longdiv_even_odd(rng, args, count=None):
+    """Long division for Part E: in the 4-col x 2-row grid (filled column-major)
+    the top row gets even divisors and the bottom row odd ones."""
+    out = []
+    for i in range(count or 8):
+        divisors = [2, 4, 6, 8] if i % 2 == 0 else [3, 5, 7, 9]   # top vs bottom
+        divisor = rng.choice(divisors)
+        q_lo = -(-args.ld_dividend_min // divisor)
+        q_hi = args.ld_dividend_max // divisor
+        quotient = rng.randint(q_lo, q_hi)
+        out.append({"kind": "longdiv", "divisor": divisor,
+                    "dividend": divisor * quotient, "answer": quotient})
+    return out
+
+
 def monster_addition(rng, args, count=None):
     """'Monster problems': add six 6-digit numbers stacked in a column."""
     out = []
@@ -322,26 +337,34 @@ def _q_digit_in_place(rng):
             "answer": str(digit)}
 
 
-def _q_regroup(rng):
-    """Add one unit to a number full of 9s so it regroups, and explain why.
-    e.g. 'Add 1 more one to 99. Write the new number. Why did it change?'"""
-    k = rng.randint(1, 3)                        # trailing nines
-    lead = "" if k == 3 else str(rng.randint(1, 9))
-    number = int(lead + "9" * k)
-    return {"kind": "qa", "space": True, "why": True,
-            "text": (f"Add 1 more one to {_fmt(number)}. Write the new number. "
-                     f"Why did it change that way?"),
-            "answer": _fmt(number + 1)}
+def _q_ten_times_place(rng):
+    """Ten of a place -> the next place, shown as x10 with a hint to add a zero.
+    e.g. 'If I have ten ten-thousands, what do I have? (10 x 10,000 - add a 0)'"""
+    place = PLACES[rng.randint(1, 6)]            # tens .. millions
+    return {"kind": "qa",
+            "text": (f"If I have ten {place[2]}, what do I have?  "
+                     f"(10 × {_fmt(place[0])} — add a 0)"),
+            "answer": _fmt(10 * place[0])}
+
+
+def _q_ten_times_number(rng):
+    """Ten of a small number -> add a zero, e.g. 'If I have ten 17's, what do I
+    have? (10 x 17 = ?)'"""
+    n = rng.randint(11, 99)
+    return {"kind": "qa",
+            "text": f"If I have ten {n}'s, what do I have?  (10 × {n} = ?)",
+            "answer": _fmt(10 * n)}
 
 
 def pv_dissect(rng, args, count=None):
-    """Part F mix: 'how many X are in this number' stock word problems plus
-    digit-in-place, bundling, and a couple regrouping 'why' questions. Only the
-    'why' ones get a work box; the rest are inline to save space."""
-    items = ([_q_how_many_in_number(rng) for _ in range(4)]
+    """Part F mix (all inline, no boxes): 'how many X are in this number' stock
+    word problems, ten-times-a-place and ten-times-a-number questions, and
+    digit-in-place."""
+    items = ([_q_how_many_in_number(rng) for _ in range(3)]
+             + [_q_ten_times_place(rng) for _ in range(2)]
+             + [_q_ten_times_number(rng) for _ in range(2)]
              + [_q_digit_in_place(rng) for _ in range(2)]
-             + [_q_dissect(rng) for _ in range(2)]
-             + [_q_regroup(rng) for _ in range(2)])
+             + [_q_dissect(rng) for _ in range(1)])
     rng.shuffle(items)
     return items
 
@@ -444,8 +467,8 @@ ALL_SECTIONS = [
     {"heading": "Part D — Fractions &amp; Mixed Numbers (same denominator)",
      "style": "fractions", "count": 8, "cols": 3,
      "overrides": {"frac_mixed_prob": 0.6}},
-    {"heading": "Part E — Long Division (3-digit ÷ 1-digit, no remainders)",
-     "style": "longdivision", "count": 8, "cols": 4},
+    {"heading": "Part E — Long Division (top row ÷ even, bottom row ÷ odd; no remainders)",
+     "builder": longdiv_even_odd, "count": 8, "cols": 4},
     {"heading": "Part F — Number Places (write each number in the chart to help you)",
      "builder": pv_dissect, "count": 10, "cols": 2, "table": True},
     {"heading": "Part G — Fractions: Find a Common Denominator, then Add or Subtract",
@@ -517,7 +540,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 /* stacked add/sub & multiplication share the monospace box */
 .cell.stack { min-height: 118px; }         /* room to write the answer & regroup */
 .cell.stack.work { min-height: 160px; }   /* lots of room to work partial products */
-.cell.stackn { min-height: 210px; }       /* monster column of six addends */
+.cell.stackn { min-height: 240px; }       /* six addends + carry room above */
 .stack-wrap { display: inline-block; }
 .stack-nums {
     margin: 0; font-family: 'Courier New', Courier, monospace;
@@ -635,7 +658,7 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .compact .page > .section-title:first-of-type { margin-top: 2px; }
 .compact .cell.stack { min-height: 104px; }    /* room to write the answer & regroup */
 .compact .cell.stack.work { min-height: 120px; }   /* freehand working space */
-.compact .cell.stackn { min-height: 190px; }   /* monster column of six addends */
+.compact .cell.stackn { min-height: 215px; }   /* six addends + carry room above */
 .compact .stack-nums, .compact .ans-slot { font-size: 16px; }
 .compact .cell.frac { min-height: 42px; }
 .compact .cell.frac2 { min-height: 64px; }     /* a little room to do the math */
@@ -676,7 +699,7 @@ def render_stackn(p, show, field=None):
     nums, ans = p["nums"], p["answer"]
     if field is None:
         field = max(max(len(str(n)) for n in nums), len(str(ans)))
-    lines = []
+    lines = ["", ""]                            # blank rows above for carrying
     for i, n in enumerate(nums):
         prefix = "+ " if i == len(nums) - 1 else "  "
         lines.append(f"{prefix}{str(n).rjust(field)}")
