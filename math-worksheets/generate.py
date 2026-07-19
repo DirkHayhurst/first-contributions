@@ -237,6 +237,28 @@ def mult_div_11_15(rng, args, count=None):
     return out
 
 
+def pyramids(rng, args, count=None):
+    """Multiplication pyramids: each brick is the product of the two below it.
+    A few bricks are given; the rest are blank and solvable by multiplying up
+    or dividing down. Every reveal pattern below has a unique whole-number
+    solution because the pyramid is built from whole-number bottom bricks."""
+    patterns = [
+        {"b0", "b1", "b2"},          # all bottom given -> multiply up
+        {"b0", "m0", "m1"},          # mixed
+        {"b2", "m0", "m1"},          # mixed
+        {"t", "m0", "b0"},           # top given -> divide down
+        {"t", "b0", "b1"},           # mixed down
+    ]
+    out = []
+    for _ in range(count or 4):
+        b0, b1, b2 = (rng.randint(2, 6) for _ in range(3))
+        m0, m1 = b0 * b1, b1 * b2
+        cells = {"t": m0 * m1, "m0": m0, "m1": m1, "b0": b0, "b1": b1, "b2": b2}
+        out.append({"kind": "pyramid", "cells": cells,
+                    "given": set(rng.choice(patterns))})
+    return out
+
+
 def gen_longdiv(rng, args, op=None):
     """Long division, drawn in the bracket form. Builds the dividend from a
     known quotient so it divides evenly (no remainder, no decimals)."""
@@ -495,6 +517,8 @@ ALL_SECTIONS = [
      "builder": monster_addition, "count": 4, "cols": 2},
     {"heading": "Part I — Multiply &amp; Divide by 11, 12, 13, 14 &amp; 15",
      "builder": mult_div_11_15, "count": 30, "cols": 5},
+    {"heading": "Part J — Multiplication Pyramids (each brick = the two below it multiplied)",
+     "builder": pyramids, "count": 4, "cols": 2},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
@@ -553,6 +577,18 @@ body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111; }
 .qnum { color: #666; font-size: 13px; min-width: 24px; text-align: right;
         padding-top: 2px; }
 .prob { font-variant-numeric: tabular-nums; }
+
+/* multiplication pyramids */
+.cell.pyramid { align-items: flex-start; min-height: 170px; }
+.pyr { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.pyr-row { display: flex; gap: 5px; }
+.brick {
+    width: 50px; height: 44px; border: 1.5px solid #111; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: bold; font-variant-numeric: tabular-nums;
+}
+.brick.blank { background: #fafafa; }
+.brick.solved { color: #c0392b; }
 
 /* horizontal style */
 .cell.h { white-space: nowrap; }
@@ -791,6 +827,26 @@ def render_frac2(p, show):
             f'<span class="eq">=</span>{answer}')
 
 
+def render_pyramid(p, show):
+    """A 3-layer multiplication pyramid. Given bricks are filled; the rest are
+    blank on the worksheet and filled in red on the answer key."""
+    cells, given = p["cells"], p["given"]
+
+    def brick(key):
+        if show or key in given:
+            cls = "brick" if key in given else "brick solved"
+            return f'<span class="{cls}">{cells[key]}</span>'
+        return '<span class="brick blank"></span>'
+
+    return (
+        '<div class="pyr">'
+        f'<div class="pyr-row">{brick("t")}</div>'
+        f'<div class="pyr-row">{brick("m0")}{brick("m1")}</div>'
+        f'<div class="pyr-row">{brick("b0")}{brick("b1")}{brick("b2")}</div>'
+        '</div>'
+    )
+
+
 def render_longdiv(p, show):
     """Long division in bracket form: divisor ) dividend, with the quotient
     sitting above the bar (shown only on the answer key)."""
@@ -820,7 +876,8 @@ def render_qa(p, show):
 
 RENDERERS = {"h": render_horizontal, "stack": render_stack,
              "frac": render_frac, "frac2": render_frac2,
-             "longdiv": render_longdiv, "qa": render_qa}
+             "longdiv": render_longdiv, "qa": render_qa,
+             "pyramid": render_pyramid}
 
 
 def render_cell(p, index, show, field=None):
