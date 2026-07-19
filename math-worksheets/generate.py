@@ -219,6 +219,24 @@ def monster_addition(rng, args, count=None):
     return out
 
 
+def mult_div_11_15(rng, args, count=None):
+    """Multiply and divide by 11, 12, 13, 14, 15 -- 15 of each type, mixed."""
+    specials = [11, 12, 13, 14, 15]
+    out = []
+    for _ in range(15):                          # multiplication
+        s = rng.choice(specials)
+        f = rng.randint(1, 12)
+        text = (f"{s} {MULT} {f} =" if rng.random() < 0.5
+                else f"{f} {MULT} {s} =")
+        out.append({"kind": "h", "text": text, "answer": s * f})
+    for _ in range(15):                          # division (whole quotient)
+        s = rng.choice(specials)
+        q = rng.randint(1, 12)
+        out.append({"kind": "h", "text": f"{s * q} {DIV} {s} =", "answer": q})
+    rng.shuffle(out)
+    return out
+
+
 def gen_longdiv(rng, args, op=None):
     """Long division, drawn in the bracket form. Builds the dividend from a
     known quotient so it divides evenly (no remainder, no decimals)."""
@@ -475,6 +493,8 @@ ALL_SECTIONS = [
      "builder": frac_common_denom, "count": 8, "cols": 2},
     {"heading": "Part H — Monster Problems (add all six numbers)",
      "builder": monster_addition, "count": 4, "cols": 2},
+    {"heading": "Part I — Multiply &amp; Divide by 11, 12, 13, 14 &amp; 15",
+     "builder": mult_div_11_15, "count": 30, "cols": 5},
 ]
 
 # sections for the "placevalue" style. These use a `builder` (a function that
